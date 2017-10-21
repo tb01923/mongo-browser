@@ -1,0 +1,42 @@
+{
+  "name": "mongo-browser",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {},
+  "dependencies": {
+    "app-module-path": "^2.2.0",
+    "camelcase-keys": "^4.1.0",
+    "co": "^4.6.0",
+    "debug": "^2.2.0",
+    "fluture": "^6.2.4",
+    "fluture-sanctuary-types": "^1.2.0",
+    "koa": "^2.2.0",
+    "koa-bodyparser": "^4.2.0",
+    "koa-is-json": "^1.0.0",
+    "koa-mongo": "^1.2.1",
+    "koa-router": "^7.1.1",
+    "koa-static": "^4.0.1",
+    "koa-views": "^6.0.2",
+    "mongo": "^0.1.0",
+    "mongodb": "^2.2.30",
+    "ramda": "^0.24.1",
+    "sanctuary": "^0.13.2",
+    "sanctuary-def": "^0.12.1",
+    "standard-http-error": "^2.0.0",
+    "streaming-json-stringify": "^3.1.0",
+    "swig": "^1.4.2"
+  },
+  "devDependencies": {},
+  "description": "<br/> ### Build Status ---",
+  "main": ".eslintrc.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tb01923/mongo-browser.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tb01923/mongo-browser/issues"
+  },
+  "homepage": "https://github.com/tb01923/mongo-browser#readme"
+}
