@@ -2,8 +2,8 @@
 "use strict";
 
 const
-    isJSON = require('koa-is-json'),
-    Stringify = require('streaming-json-stringify');
+  isJSON = require('koa-is-json'),
+  Stringify = require('streaming-json-stringify');
 
 /**
  * jsonFormatter
@@ -12,11 +12,11 @@ const
  * @author Evan King
  */
 module.exports.jsonFormatter = async function (ctx, next) {
-    await next();
+  await next();
 
-    if (isJSON(ctx.body)) {
-        ctx.body = JSON.stringify(ctx.body, null, 2);
-    }
+  if (isJSON(ctx.body)) {
+    ctx.body = JSON.stringify(ctx.body, null, 2);
+  }
 };
 
 /**
@@ -29,33 +29,30 @@ module.exports.jsonFormatter = async function (ctx, next) {
  * @author Evan King
  */
 module.exports.jsonStreamer = function(options) {
-    options = options || {};
-    const pretty = options.pretty || false;
-    const spaces = options.spaces || 2;
+  options = options || {};
+  const pretty = options.pretty || false;
+  const spaces = options.spaces || 2;
 
-    return async function filter(ctx, next) {
-        await next();
-        const body = ctx.body;
-        const isNotRest = ctx.path.indexOf('rest') < 1 ;
+  return async function filter(ctx, next) {
+    await next();
+    const body = ctx.body;
 
-        if(isNotRest) return ctx
+    // Pipe stream output through Stringify
+    if (body && typeof body.pipe === 'function') {
+      ctx.response.type = 'json';
+      const stringify = Stringify();
 
-        // Pipe stream output through Stringify
-        if (body && typeof body.pipe === 'function') {
-            ctx.response.type = 'json';
-            const stringify = Stringify();
+      if (pretty) {
+        stringify.space = spaces;
+      }
+      return ctx.body = body.pipe(stringify);
+    }
 
-            if (pretty) {
-                stringify.space = spaces;
-            }
-            return ctx.body = body.pipe(stringify);
-        }
-
-        // Override JSON output with pretty-printing
-        if (pretty && isJSON(body)) {
-            return ctx.body = JSON.stringify(body, null, spaces);
-        }
-    };
+    // Override JSON output with pretty-printing
+    if (pretty && isJSON(body)) {
+      return ctx.body = JSON.stringify(body, null, spaces);
+    }
+  };
 };
 
 /**
@@ -67,15 +64,15 @@ module.exports.jsonStreamer = function(options) {
  * @author Evan King
  */
 module.exports.jsonAcceptNullBody = async function (ctx, next) {
-    await next();
+  await next();
 
-    if (ctx.body === null) {
-        // Only preserve original status if it's not 204 (no content)
-        const originalStatus = (ctx.status == 204) ? 404 : ctx.status;
-        ctx.body = 'null';
-        ctx.response.type = 'json';
-        ctx.status = originalStatus || 404;
-    }
+  if (ctx.body === null) {
+    // Only preserve original status if it's not 204 (no content)
+    const originalStatus = (ctx.status == 204) ? 404 : ctx.status;
+    ctx.body = 'null';
+    ctx.response.type = 'json';
+    ctx.status = originalStatus || 404;
+  }
 };
 
 /**
@@ -87,26 +84,61 @@ module.exports.jsonAcceptNullBody = async function (ctx, next) {
  * response body and status itself when no route is matched.
  */
 module.exports.routeNotFound = async function (ctx, next) {
-    await next();
+  await next();
 
-    if (ctx.status != 404) {
-        return;
-    }
+  if (ctx.status != 404) {
+    return;
+  }
 
-
-    // we need to explicitly set 404 here
-    // so that koa doesn't assign 200|204 on body set
-    ctx.body = ctx.path + " not found" ;
-    ctx.status = 404;
+  // we need to explicitly set 404 here
+  // so that koa doesn't assign 200|204 on body set
+  ctx.body = "Not found";
+  ctx.status = 404;
 };
 
+/**
+ * responseTimer
+ * Time requests (time to start response, not completion)
+ * with rolling average.
+ *
+ * @author Evan King
+ */
+let responseCount = 0;
+let avgResponse = 0;
 module.exports.responseTimer = async function (ctx, next) {
-    const start = Date.now();
-    await next();
-    const delta = Math.ceil(Date.now() - start);
+  const start = Date.now();
+  await next();
+  const delta = Math.ceil(Date.now() - start);
 
-    console.log(
-        ctx.path + '\t' + delta + 'ms;');
+  avgResponse = (avgResponse * responseCount++ + delta) / responseCount;
+  console.log(
+    "response: " + delta + 'ms;' +
+    " avg: " + Math.round(avgResponse) + "ms"
+  );
 
-    ctx.set('X-Response-Time', delta + 'ms');
+  ctx.set('X-Response-Time', delta + 'ms');
 };
+
+/**
+ * memoryUsage
+ * Track active memory usage with rolling average
+ *
+ * @author Evan King
+ */
+let memCount = 0;
+let avgMem = 0;
+let peakMem = 0;
+
+module.exports.memoryUsage = async function (ctx, next) {
+  await next();
+  const mem = process.memoryUsage().rss / (1024 * 1024);
+
+  avgMem = (avgMem * memCount++ + mem) / memCount;
+  peakMem = Math.max(peakMem, mem);
+  console.log(
+    "mem: " + Math.round(mem) + 'MB;' +
+    " avg: " + Math.round(avgMem) + "MB;" +
+    " peak: " + Math.round(peakMem) + "MB;"
+  );
+};
+

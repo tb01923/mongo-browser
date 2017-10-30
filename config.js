@@ -1,10 +1,8 @@
-"use strict";
-
+'use strict';
 module.exports = {
-    development: {
-        port: 8000,
-        cache: false,
-        debug: true,
-        singleCore: true,
-    }
+  development: {
+    port: 3000,
+    singleCore: true,
+    debug: false
+  }
 };

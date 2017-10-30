@@ -3,83 +3,72 @@ const {env: flutureEnv} = require('fluture-sanctuary-types');
 const F = require('fluture');
 const S = create({checkTypes: false, env: env.concat(flutureEnv)});
 const R = require('ramda');
-const MongoClient = require('mongodb').MongoClient;
+const mongoClient = require('mongodb').MongoClient;
 
-const mongoClientConnect = R.curry(MongoClient.connect)
-const connect = (host, database) => F.node(
-    mongoClientConnect('mongodb://' + host + ':27017/' + database, null)
-)
+const encaseTest = F.encaseN(mongoClient.connect);
+
+const connect = R.curry((host, database) => encaseTest('mongodb://' + host + ':27017/' + database));
+
+const rejectMongoConnection = (host, database) => (e) => {
+    const err = {};
+    err.message = e.message;
+    err.stack = e.stack;
+    err.host = host;
+    err.database = database;
+    return F.reject(err);
+};
 
 const rejectMongoOf = (collection, query, projection) => (e) => {
     const err = {};
     err.message = e.message;
     err.stack = e.stack;
-    err.collection = collection
-    err.query = query
-    err.projection  =projection
-    console.error(err)
+    err.collection = collection;
+    err.query = query;
+    err.projection = projection;
     return F.reject(err);
 };
-
-const skipper = R.invoker(1, 'skip')
-const limmiter = R.invoker(1, 'limit')
-const toArrayer = R.invoker(1, 'toArray')
-
-const toArray = R.curry(function (skip, limit, cursor) {
-    const chain = []
-    if(skip) chain.push(skipper(skip))
-    if(limit) chain.push(limmiter(limit))
-
-    return new F(function (reject, resolve) {
-        const resolver = function (err, xs) {
-            if (err) { reject (err); }
-            else     { resolve (xs); }
-        }
-
-        chain.push(toArrayer(resolver))
-        S.pipe(chain)(cursor) ;
-    });
-})
-
-const executeFind = R.curry(function(collection, query, projection, options, db) {
-
-    const findInCollection = (query, projection) => function(callback)  {
-        return db.collection(collection).find(query, projection, callback)
-    }
-
-    const rejector = rejectMongoOf(collection, query, projection)
-
-    return F.node(
-        findInCollection(query, projection)
-    ).chainRej(
-        rejector
-    ).chain(
-        toArray(options.skip, options.limit)
-    ) ;
-})
+// named functions conversions into directly called functions
+const toArray = R.invoker(0, 'toArray');
+const limit = R.invoker(1, 'limit');
+const find = R.invoker(1, 'find');
+const findOne = R.invoker(1, 'findOne');
+const project = R.invoker(1, 'project');
+const aggregate = R.invoker(1, 'aggregate');
 
 
-const buildFind = function(collection, query, projection, skip, limit){
-    return executeFind(collection, query, projection, {skip, limit})
-}
+const executeAction = R.curry((actionFunction, projectFn, collection, query, db) => {
+    const getCollection = db.collection(collection);
 
-const withConnection = function(mongo){
+    const queryPipeline = R.pipe(
+        actionFunction(query),
+        projectFn,
+        toArray);
 
-    const Right = (obj) => {
-        return S.Right(obj)
-    }
-    const Left= (obj) => {
-        return S.Left(obj)
-    }
-    const executeSingle = runStatement => {
-        return runStatement(mongo).fold(Left, Right);
-    };
+    return F.tryP(() => queryPipeline(getCollection))
+        .chainRej(rejectMongoOf(collection, query));
+});
+
+// build functions
+const buildFind = executeAction(find, project({ _id: 0}));
+const buildFindOne = executeAction(findOne, project({ _id: 0}));
+const buildAggregate = executeAction(aggregate, project({ _id: 0}));
+
+const withConnection = function (mongo) {
+
+    const closeCursor = F.tryP(() => mongo.close());
+
+    const executeSingle = runStatement => F.parallel(1, [runStatement(mongo), closeCursor])
+        .map(R.head);
 
     return Object.freeze({executeSingle});
-}
+};
 
 module.exports = Object.freeze({
     connect,
+    buildAggregate,
     buildFind,
+    buildFindOne,
+    rejectMongoConnection,
     withConnection
 });
+

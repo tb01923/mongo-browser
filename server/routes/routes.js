@@ -1,19 +1,18 @@
 "use strict";
-const Router = require('koa-router') ;
-const { getObjects } = require('../route-handlers/anonymous/rest/object-browser') ;
 
-const index = async function(ctx) {
-    ctx.status = 200;
-    await ctx.render('index.html');
-};
+const Router = require('koa-router');
+const { runSimpleSearch, runAdvancedSearch} = require('./route-handlers/search-route');
 
 module.exports.anonymousRouteMiddleware = function() {
-    const rest = new Router() ;
 
-    rest.get('/', index) ;
-    rest.get('/index', index) ;
+    const rest = new Router();
 
-    rest.get('/rest/collection-density/:mongo/:database/:collection', getObjects) ;
+    // run simple search
+    rest.post('/rest/simple/:database/:collection', runSimpleSearch);
 
-    return rest.middleware() ;
+    // run advanced search
+    rest.post('/rest/advanced/:database/:collection', runAdvancedSearch);
+
+    return rest.middleware();
 };
+

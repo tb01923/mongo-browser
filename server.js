@@ -1,55 +1,52 @@
-/*eslint-disable no-console*/
-/*eslint complexity: ["error", 4]*/
-
-
-"use strict";
+'use strict';
 
 // Enable requiring modules relative to server directory
 require('app-module-path').addPath(__dirname + '/server');
 require('app-module-path').addPath(__dirname);
 
 const
-    cluster = require('cluster'),
-    koa = require('koa'),
-    bodyParser = require('koa-bodyparser'),
-    koaStatic = require('koa-static'),
-    output = require('./server/middleware/output-filters'),
-    path = require('path'),
-    views = require('koa-views');
+  cluster = require('cluster'),
+  koa = require('koa'),
+  serveStatic = require('koa-static'),
+  bodyParser = require('koa-bodyparser'),
+  output = require('./server/middleware/output-filters'),
+  ErrorHandler = require('middleware/http-error-handler'),
+  path = require('path');
+
 
 const bootstrapServer = async function (config) {
-    const
-        routes = require('routes/routes'),
-        app = new koa();
 
+  const routes = require('routes/routes');
+  const app = new koa();
+
+  if (config.debug) {
     app.use(output.responseTimer);
+    //app.use(output.memoryUsage);
+  }
 
+  // server build folder
+  app.use(serveStatic('./build'));
 
-    // Parse request bodies as JSON
-    app.use(bodyParser());
+  // Parse request bodies as JSON
+  app.use(bodyParser());
 
-    // Force all valid requests to respond appropriately
-    //app.use(output.jsonAcceptNullBody);
+  // Force all valid requests to respond appropriately
+  app.use(output.jsonAcceptNullBody);
 
-    // Print JSON output with optional pretty-printing, and pipe streams into response output
-    app.use(output.jsonStreamer({pretty: config.debug}));
+  // Print JSON output with optional pretty-printing, and pipe streams into response output
+  app.use(output.jsonStreamer({pretty: config.debug}));
 
-    app.use(views('./server/server-side-views', {
-        map: { html: 'swig' },
-        cache: false
-    }));
+  // Catch errors and respect response codes from HttpErrors
+  app.use(ErrorHandler.middleware({debug: config.debug, pretty: config.debug}));
 
-    app.use(koaStatic(__dirname + '/client', {defer: false}));
+  // Add routing to request handlers
+  app.use(routes.anonymousRouteMiddleware());
 
+  app.listen(config.port);
 
-    // Add routing to request handlers
-    app.use(routes.anonymousRouteMiddleware());
-
-
-
-    // Begin
-    app.listen(config.port);
+  console.log(`listening on port ${config.port}`);
 };
+
 
 /**
  * startServer
@@ -59,5 +56,5 @@ const bootstrapServer = async function (config) {
  * @return Promise
  */
 module.exports.startServer = async function (config) {
-    await bootstrapServer(config).catch(ex => console.error(ex.stack || ex));
+  await bootstrapServer(config).catch(ex => console.error(ex.stack || ex));
 };
