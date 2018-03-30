@@ -15,6 +15,7 @@ const
     koaStatic = require('koa-static'),
     output = require('./server/middleware/output-filters'),
     path = require('path'),
+    mongo = require('koa-mongo'),
     views = require('koa-views');
 
 const bootstrapServer = async function (config) {
@@ -41,11 +42,16 @@ const bootstrapServer = async function (config) {
 
     app.use(koaStatic(__dirname + '/client', {defer: false}));
 
+    app.use(mongo({
+        host: 'localhost',
+        port: 27017,
+        db: 'test',
+        max: 10,
+        min: 1
+    }));
 
     // Add routing to request handlers
     app.use(routes.anonymousRouteMiddleware());
-
-
 
     // Begin
     app.listen(config.port);
@@ -59,5 +65,7 @@ const bootstrapServer = async function (config) {
  * @return Promise
  */
 module.exports.startServer = async function (config) {
-    await bootstrapServer(config).catch(ex => console.error(ex.stack || ex));
+    await bootstrapServer(config).catch(
+        ex => console.error(ex.stack || ex)
+    );
 };

@@ -10,13 +10,14 @@ const connect = (host, database) => F.node(
     mongoClientConnect('mongodb://' + host + ':27017/' + database, null)
 )
 
-const rejectMongoOf = (collection, query, projection) => (e) => {
+const rejectMongoOf = (collection, query, projection, object) => (e) => {
     const err = {};
     err.message = e.message;
     err.stack = e.stack;
     err.collection = collection
     err.query = query
     err.projection  =projection
+    err.object = object
     console.error(err)
     return F.reject(err);
 };
@@ -41,9 +42,11 @@ const toArray = R.curry(function (skip, limit, cursor) {
     });
 })
 
+const getResult = cursor => cursor.result ;
+
 const executeFind = R.curry(function(collection, query, projection, options, db) {
 
-    const findInCollection = (query, projection) => function(callback)  {
+    const findInCollection = () => function(callback)  {
         return db.collection(collection).find(query, projection, callback)
     }
 
@@ -63,23 +66,48 @@ const buildFind = function(collection, query, projection, skip, limit){
     return executeFind(collection, query, projection, {skip, limit})
 }
 
+const executeUpdate = R.curry(function(collection, query, object, upsert, db) {
+
+    const updateCollection = () => function(callback)  {
+        return db.collection(collection).update(query, object, {"upsert": upsert}, callback)
+    }
+
+    const rejector = rejectMongoOf(collection, query, null, object)
+
+    return F.node(
+        updateCollection(query, object, upsert)
+    ).chainRej(
+        rejector
+    ).map(
+        getResult
+    ) ;
+})
+
+
+const buildUpsert = function(collection, query, object){
+    return executeUpdate(collection, query, object, true)
+}
+
 const withConnection = function(mongo){
 
-    const Right = (obj) => {
-        return S.Right(obj)
-    }
-    const Left= (obj) => {
-        return S.Left(obj)
-    }
-    const executeSingle = runStatement => {
-        return runStatement(mongo).fold(Left, Right);
-    };
+    // const executeSingle = runStatement => {
+    //     return runStatement(mongo).fold(S.Left, S.Right);
+    // };
 
-    return Object.freeze({executeSingle});
+    // (mongo -> Future e a) -> Future e Either e a
+    const executeSingle = S.pipe([
+        S.T(mongo),
+        F.fold(S.Left, S.Right)
+    ])
+
+    return Object.freeze({
+        executeSingle
+    });
 }
 
 module.exports = Object.freeze({
     connect,
     buildFind,
+    buildUpsert,
     withConnection
 });
